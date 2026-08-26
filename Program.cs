@@ -14,6 +14,7 @@ builder.Services.AddSingleton<MessageRouter>();
 builder.Services.AddSingleton<CommandHandler>();
 builder.Services.AddSingleton<ServoService>();
 builder.Services.AddSingleton<RadarService>();
+builder.Services.AddHostedService<RadarUdpReceiver>();
 
 var app = builder.Build();
 
