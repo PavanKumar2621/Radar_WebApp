@@ -1,0 +1,87 @@
+﻿@page
+
+<h1>WebSocket Demo</h1>
+
+<button id="startScanButton">
+    Start Scan
+</button>
+
+<hr />
+
+<h2>Servo Control</h2>
+
+<button id="setAzimuthButton">
+    Set Azimuth 45.5°
+</button>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js"></script>
+
+<script src="~/js/signalr.js"></script>
+
+<script src="~/js/communication.js"></script>
+
+<script>
+
+    document
+        .getElementById("startScanButton")
+        .addEventListener("click", async function () {
+
+            const message = {
+
+                messageType: "command",
+
+                requestId:
+                    "REQ-" +
+                    Date.now(),
+
+                timestamp:
+                    new Date().toISOString(),
+
+                source: "browser",
+
+                data: {
+
+                    command: "startScan"
+
+                }
+
+            };
+
+            await sendMessage(message);
+
+        });
+        
+    document
+        .getElementById("setAzimuthButton")
+        .addEventListener("click", async function () {
+
+            const message = {
+
+                messageType: "command",
+
+                requestId:
+                    "REQ-" + Date.now(),
+
+                timestamp:
+                    new Date().toISOString(),
+
+                source: "browser",
+
+                data: {
+
+                    command: "setAzimuth",
+
+                    parameters: {
+
+                        azimuth: 45.5
+
+                    }
+
+                }
+
+            };
+
+            await sendMessage(message);
+
+        });
+</script>
