@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.SignalR;
 using WebSocketDemo.Hubs;
 using WebSocketDemo.Models;
 using WebSocketDemo.Services;
+
 namespace WebSocketDemo.Services;
 
 public class RadarUdpReceiver : BackgroundService
@@ -23,37 +24,29 @@ public class RadarUdpReceiver : BackgroundService
     {
         using UdpClient udpClient = new UdpClient(PORT);
 
-        Console.WriteLine(
-            $"Radar UDP receiver started on port {PORT}");
+        Console.WriteLine($"Radar UDP receiver started on port {PORT}");
 
         try
         {
             while (!stoppingToken.IsCancellationRequested)
             {
-                UdpReceiveResult result =
-                    await udpClient.ReceiveAsync(stoppingToken);
-
+                UdpReceiveResult result = await udpClient.ReceiveAsync(stoppingToken);
                 byte[] packet = result.Buffer;
-
-                Console.WriteLine(
-                    $"UDP packet received: {packet.Length} bytes");
-
-                ParsePacket(packet);
+                Console.WriteLine($"UDP packet received: {packet.Length} bytes");
+                await ParsePacket(packet);
             }
         }
         catch (OperationCanceledException)
         {
-            Console.WriteLine(
-                "Radar UDP receiver stopped.");
+            Console.WriteLine("Radar UDP receiver stopped.");
         }
         catch (Exception ex)
         {
-            Console.WriteLine(
-                $"Radar UDP receiver error: {ex.Message}");
+            Console.WriteLine($"Radar UDP receiver error: {ex.Message}");
         }
     }
 
-    private async void ParsePacket(byte[] packet)
+    private async Task ParsePacket(byte[] packet)
     {
         // Expected packet size
         if (packet.Length < 23)

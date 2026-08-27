@@ -1,0 +1,3502 @@
+@page
+@* 
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+
+    <title>Radar Azimuth Plot</title>
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: #0b0f14;
+            color: #ffffff;
+            font-family: Arial, Helvetica, sans-serif;
+            padding: 20px;
+        }
+
+        /* =========================================
+           PAGE HEADER
+           ========================================= */
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+
+            margin-bottom: 18px;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 500;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+
+            font-size: 13px;
+            color: #aaa;
+        }
+
+        .status-dot {
+            width: 9px;
+            height: 9px;
+
+            border-radius: 50%;
+            background: #00ff66;
+
+            box-shadow: 0 0 8px #00ff66;
+        }
+
+        /* =========================================
+           MAIN PLOT CARD
+           ========================================= */
+
+        .plot-container {
+            width: 100%;
+
+            background: #11161d;
+
+            border: 1px solid #28313b;
+
+            border-radius: 10px;
+
+            padding: 18px;
+        }
+
+        .plot-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+
+            margin-bottom: 12px;
+        }
+
+        .plot-title-left {
+            font-size: 15px;
+            color: #ddd;
+        }
+
+        .plot-title-right {
+            font-size: 12px;
+            color: #777;
+        }
+
+        /* =========================================
+           CANVAS
+           ========================================= */
+
+        .canvas-wrapper {
+            position: relative;
+
+            width: 100%;
+            height: 450px;
+
+            background: #080b0f;
+
+            border: 1px solid #252d36;
+
+            border-radius: 6px;
+
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+
+            width: 100%;
+            height: 100%;
+        }
+
+        /* =========================================
+           LEGEND
+           ========================================= */
+
+        .legend {
+            display: flex;
+
+            flex-wrap: wrap;
+
+            gap: 12px;
+
+            margin-top: 14px;
+
+            min-height: 24px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+
+            gap: 7px;
+
+            padding: 5px 9px;
+
+            background: #171d24;
+
+            border: 1px solid #29323c;
+
+            border-radius: 5px;
+
+            font-size: 12px;
+
+            color: #ccc;
+        }
+
+        .legend-color {
+            width: 10px;
+            height: 10px;
+
+            border-radius: 50%;
+        }
+
+        /* =========================================
+           TRACK INFORMATION
+           ========================================= */
+
+        .track-panel {
+            display: grid;
+
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+
+            gap: 10px;
+
+            margin-top: 14px;
+        }
+
+        .track-card {
+            background: #151b22;
+
+            border: 1px solid #29323c;
+
+            border-radius: 6px;
+
+            padding: 10px 12px;
+        }
+
+        .track-card-header {
+            display: flex;
+            justify-content: space-between;
+
+            margin-bottom: 7px;
+
+            font-size: 12px;
+            color: #aaa;
+        }
+
+        .track-value {
+            font-size: 22px;
+
+            font-weight: 500;
+
+            color: #ffffff;
+        }
+
+        .track-unit {
+            font-size: 12px;
+
+            color: #777;
+
+            margin-left: 3px;
+        }
+
+    </style>
+</head>
+
+<body>
+
+    <!-- =========================================
+         HEADER
+         ========================================= -->
+
+    <div class="header">
+
+        <h1>
+            Radar Azimuth Plot
+        </h1>
+
+        <div class="status">
+
+            <div class="status-dot"></div>
+
+            <span>
+                LIVE
+            </span>
+
+        </div>
+
+    </div>
+
+
+    <!-- =========================================
+         PLOT
+         ========================================= -->
+
+    <div class="plot-container">
+
+        <div class="plot-title">
+
+            <div class="plot-title-left">
+                Azimuth vs Time
+            </div>
+
+            <div class="plot-title-right">
+                Last 100 samples
+            </div>
+
+        </div>
+
+
+        <div class="canvas-wrapper">
+
+            <canvas id="azimuthPlot"></canvas>
+
+        </div>
+
+
+        <!-- =====================================
+             LEGEND
+             ===================================== -->
+
+        <div
+            id="legend"
+            class="legend">
+        </div>
+
+
+        <!-- =====================================
+             TRACK VALUES
+             ===================================== -->
+
+        <div
+            id="trackPanel"
+            class="track-panel">
+        </div>
+
+    </div>
+
+
+    <!-- =========================================
+         SIGNALR
+         ========================================= -->
+
+    <script src="~/js/lib/signalr.min.js"></script>
+
+    <script src="~/js/signalr.js"></script>
+
+    <script src="~/js/communication.js"></script>
+
+    <script src="~/js/radarData.js"></script>
+
+
+    <script>
+
+        // =========================================
+        // CANVAS
+        // =========================================
+
+        const canvas =
+            document.getElementById("azimuthPlot");
+
+        const ctx =
+            canvas.getContext("2d");
+
+
+        // =========================================
+        // SETTINGS
+        // =========================================
+
+        const MAX_POINTS = 100;
+
+        const MIN_AZIMUTH = 0;
+
+        const MAX_AZIMUTH = 360;
+
+
+        // =========================================
+        // TRACK DATA
+        // =========================================
+
+        const plotData = {};
+
+
+        // =========================================
+        // TRACK COLORS
+        // =========================================
+
+        const trackColors = [
+
+            "#00ff66",
+            "#00bfff",
+            "#ffcc00",
+            "#ff4d6d",
+            "#c084fc",
+            "#ff8c42",
+            "#22d3ee",
+            "#f472b6",
+            "#a3e635",
+            "#fb7185"
+
+        ];
+
+
+        function getTrackColor(trackId) {
+
+            const index =
+                Number(trackId) % trackColors.length;
+
+            return trackColors[index];
+
+        }
+
+
+        // =========================================
+        // RESIZE CANVAS
+        // =========================================
+
+        function resizeCanvas() {
+
+            const rect =
+                canvas.getBoundingClientRect();
+
+            const dpr =
+                window.devicePixelRatio || 1;
+
+            canvas.width =
+                rect.width * dpr;
+
+            canvas.height =
+                rect.height * dpr;
+
+            ctx.setTransform(
+                dpr,
+                0,
+                0,
+                dpr,
+                0,
+                0
+            );
+
+            drawPlot();
+
+        }
+
+
+        window.addEventListener(
+            "resize",
+            resizeCanvas
+        );
+
+
+        // =========================================
+        // RECEIVE RADAR DATA
+        // =========================================
+
+        RadarDataManager.addHandler(function (data) {
+
+            const trackId =
+                data.trackId;
+
+            if (trackId == null) {
+                return;
+            }
+
+
+            const azimuth =
+                Number(data.azimuth);
+
+
+            if (!Number.isFinite(azimuth)) {
+                return;
+            }
+
+
+            // -------------------------------------
+            // CREATE TRACK
+            // -------------------------------------
+
+            if (!plotData[trackId]) {
+
+                plotData[trackId] = {
+
+                    points: [],
+
+                    color:
+                        getTrackColor(trackId),
+
+                    lastValue:
+                        azimuth
+
+                };
+
+            }
+
+
+            // -------------------------------------
+            // ADD POINT
+            // -------------------------------------
+
+            plotData[trackId].points.push({
+
+                time:
+                    Date.now(),
+
+                value:
+                    azimuth
+
+            });
+
+
+            plotData[trackId].lastValue =
+                azimuth;
+
+
+            // -------------------------------------
+            // KEEP LAST 100
+            // -------------------------------------
+
+            if (
+                plotData[trackId].points.length >
+                MAX_POINTS
+            ) {
+
+                plotData[trackId].points.shift();
+
+            }
+
+
+            // -------------------------------------
+            // UPDATE UI
+            // -------------------------------------
+
+            updateLegend();
+
+            updateTrackPanel();
+
+            drawPlot();
+
+        });
+
+
+        // =========================================
+        // DRAW BACKGROUND
+        // =========================================
+
+        function drawBackground(
+            width,
+            height
+        ) {
+
+            ctx.fillStyle =
+                "#080b0f";
+
+            ctx.fillRect(
+                0,
+                0,
+                width,
+                height
+            );
+
+        }
+
+
+        // =========================================
+        // DRAW GRID
+        // =========================================
+
+        function drawGrid(
+            width,
+            height,
+            left,
+            right,
+            top,
+            bottom
+        ) {
+
+            const plotWidth =
+                width - left - right;
+
+            const plotHeight =
+                height - top - bottom;
+
+
+            // -------------------------------------
+            // HORIZONTAL GRID
+            // -------------------------------------
+
+            ctx.lineWidth = 1;
+
+            ctx.strokeStyle =
+                "#202830";
+
+
+            for (
+                let degree = 0;
+                degree <= 360;
+                degree += 30
+            ) {
+
+                const y =
+                    bottom +
+                    (
+                        (360 - degree) /
+                        360
+                    ) *
+                    plotHeight;
+
+
+                ctx.beginPath();
+
+                ctx.moveTo(
+                    left,
+                    y
+                );
+
+                ctx.lineTo(
+                    left + plotWidth,
+                    y
+                );
+
+                ctx.stroke();
+
+            }
+
+
+            // -------------------------------------
+            // VERTICAL GRID
+            // -------------------------------------
+
+            for (
+                let i = 0;
+                i <= 10;
+                i++
+            ) {
+
+                const x =
+                    left +
+                    (
+                        i / 10
+                    ) *
+                    plotWidth;
+
+
+                ctx.beginPath();
+
+                ctx.moveTo(
+                    x,
+                    top
+                );
+
+                ctx.lineTo(
+                    x,
+                    bottom
+                );
+
+                ctx.stroke();
+
+            }
+
+
+            // -------------------------------------
+            // MAJOR 90 DEGREE LINES
+            // -------------------------------------
+
+            ctx.strokeStyle =
+                "#35404b";
+
+            ctx.lineWidth = 1;
+
+
+            [0, 90, 180, 270, 360]
+                .forEach(function (degree) {
+
+                    const y =
+                        bottom +
+                        (
+                            (360 - degree) /
+                            360
+                        ) *
+                        plotHeight;
+
+
+                    ctx.beginPath();
+
+                    ctx.moveTo(
+                        left,
+                        y
+                    );
+
+                    ctx.lineTo(
+                        left + plotWidth,
+                        y
+                    );
+
+                    ctx.stroke();
+
+                });
+
+        }
+
+
+        // =========================================
+        // DRAW AXIS LABELS
+        // =========================================
+
+        function drawAxisLabels(
+            width,
+            height,
+            left,
+            right,
+            top,
+            bottom
+        ) {
+
+            const plotWidth =
+                width - left - right;
+
+            const plotHeight =
+                height - top - bottom;
+
+
+            ctx.fillStyle =
+                "#8b949e";
+
+            ctx.font =
+                "12px Arial";
+
+            ctx.textAlign =
+                "right";
+
+
+            // -------------------------------------
+            // Y AXIS
+            // -------------------------------------
+
+            for (
+                let degree = 0;
+                degree <= 360;
+                degree += 30
+            ) {
+
+                const y =
+                    bottom +
+                    (
+                        (360 - degree) /
+                        360
+                    ) *
+                    plotHeight;
+
+
+                ctx.fillText(
+
+                    degree + "°",
+
+                    left - 8,
+
+                    y + 4
+
+                );
+
+            }
+
+
+            // -------------------------------------
+            // X AXIS
+            // -------------------------------------
+
+            ctx.textAlign =
+                "center";
+
+
+            for (
+                let i = 0;
+                i <= 10;
+                i++
+            ) {
+
+                const x =
+                    left +
+                    (
+                        i / 10
+                    ) *
+                    plotWidth;
+
+
+                const seconds =
+                    -10 + i;
+
+
+                let label;
+
+
+                if (seconds === 0) {
+
+                    label = "Now";
+
+                }
+                else {
+
+                    label =
+                        seconds + "s";
+
+                }
+
+
+                ctx.fillText(
+
+                    label,
+
+                    x,
+
+                    height - 10
+
+                );
+
+            }
+
+        }
+
+
+        // =========================================
+        // DRAW TRACK
+        // =========================================
+
+        function drawTrack(
+            track,
+            width,
+            height,
+            left,
+            right,
+            top,
+            bottom
+        ) {
+
+            const points =
+                track.points;
+
+
+            if (points.length < 2) {
+                return;
+            }
+
+
+            const plotWidth =
+                width - left - right;
+
+            const plotHeight =
+                height - top - bottom;
+
+
+            ctx.beginPath();
+
+
+            points.forEach(
+                function (point, index) {
+
+                    const x =
+                        left +
+                        (
+                            index /
+                            (MAX_POINTS - 1)
+                        ) *
+                        plotWidth;
+
+
+                    const clampedValue =
+                        Math.max(
+                            MIN_AZIMUTH,
+                            Math.min(
+                                MAX_AZIMUTH,
+                                point.value
+                            )
+                        );
+
+
+                    const y =
+                        bottom +
+                        (
+                            (MAX_AZIMUTH -
+                                clampedValue) /
+                            (
+                                MAX_AZIMUTH -
+                                MIN_AZIMUTH
+                            )
+                        ) *
+                        plotHeight;
+
+
+                    if (index === 0) {
+
+                        ctx.moveTo(
+                            x,
+                            y
+                        );
+
+                    }
+                    else {
+
+                        ctx.lineTo(
+                            x,
+                            y
+                        );
+
+                    }
+
+                }
+            );
+
+
+            // -------------------------------------
+            // LINE
+            // -------------------------------------
+
+            ctx.strokeStyle =
+                track.color;
+
+            ctx.lineWidth = 2;
+
+            ctx.lineJoin =
+                "round";
+
+            ctx.lineCap =
+                "round";
+
+            ctx.stroke();
+
+
+            // -------------------------------------
+            // CURRENT POINT
+            // -------------------------------------
+
+            const last =
+                points[points.length - 1];
+
+
+            const lastX =
+                left +
+                (
+                    (points.length - 1) /
+                    (MAX_POINTS - 1)
+                ) *
+                plotWidth;
+
+
+            const lastValue =
+                Math.max(
+                    MIN_AZIMUTH,
+                    Math.min(
+                        MAX_AZIMUTH,
+                        last.value
+                    )
+                );
+
+
+            const lastY =
+                bottom +
+                (
+                    (MAX_AZIMUTH -
+                        lastValue) /
+                    (
+                        MAX_AZIMUTH -
+                        MIN_AZIMUTH
+                    )
+                ) *
+                plotHeight;
+
+
+            ctx.beginPath();
+
+            ctx.arc(
+                lastX,
+                lastY,
+                4,
+                0,
+                Math.PI * 2
+            );
+
+            ctx.fillStyle =
+                track.color;
+
+            ctx.fill();
+
+
+            // -------------------------------------
+            // CURRENT VALUE
+            // -------------------------------------
+
+            ctx.fillStyle =
+                track.color;
+
+            ctx.font =
+                "12px Arial";
+
+            ctx.textAlign =
+                "left";
+
+
+            ctx.fillText(
+
+                "T" +
+                " " +
+                lastValue.toFixed(2) +
+                "°",
+
+                lastX + 7,
+
+                lastY - 7
+
+            );
+
+        }
+
+
+        // =========================================
+        // DRAW PLOT
+        // =========================================
+
+        function drawPlot() {
+
+            const rect =
+                canvas.getBoundingClientRect();
+
+
+            const width =
+                rect.width;
+
+            const height =
+                rect.height;
+
+
+            if (
+                width <= 0 ||
+                height <= 0
+            ) {
+
+                return;
+
+            }
+
+
+            // -------------------------------------
+            // MARGINS
+            // -------------------------------------
+
+            const left =
+                55;
+
+            const right =
+                20;
+
+            const top =
+                20;
+
+            const bottom =
+                35;
+
+
+            // -------------------------------------
+            // BACKGROUND
+            // -------------------------------------
+
+            drawBackground(
+                width,
+                height
+            );
+
+
+            // -------------------------------------
+            // GRID
+            // -------------------------------------
+
+            drawGrid(
+                width,
+                height,
+                left,
+                right,
+                top,
+                bottom
+            );
+
+
+            // -------------------------------------
+            // AXIS LABELS
+            // -------------------------------------
+
+            drawAxisLabels(
+                width,
+                height,
+                left,
+                right,
+                top,
+                bottom
+            );
+
+
+            // -------------------------------------
+            // TRACKS
+            // -------------------------------------
+
+            for (
+                const trackId in plotData
+            ) {
+
+                drawTrack(
+
+                    plotData[trackId],
+
+                    width,
+                    height,
+
+                    left,
+                    right,
+                    top,
+                    bottom
+
+                );
+
+            }
+
+        }
+
+
+        // =========================================
+        // UPDATE LEGEND
+        // =========================================
+
+        function updateLegend() {
+
+            const legend =
+                document.getElementById(
+                    "legend"
+                );
+
+
+            legend.innerHTML = "";
+
+
+            for (
+                const trackId in plotData
+            ) {
+
+                const track =
+                    plotData[trackId];
+
+
+                const item =
+                    document.createElement(
+                        "div"
+                    );
+
+
+                item.className =
+                    "legend-item";
+
+
+                const color =
+                    document.createElement(
+                        "div"
+                    );
+
+
+                color.className =
+                    "legend-color";
+
+
+                color.style.background =
+                    track.color;
+
+
+                const text =
+                    document.createElement(
+                        "span"
+                    );
+
+
+                text.textContent =
+                    "Track " +
+                    trackId;
+
+
+                item.appendChild(color);
+
+                item.appendChild(text);
+
+                legend.appendChild(item);
+
+            }
+
+        }
+
+
+        // =========================================
+        // UPDATE TRACK PANEL
+        // =========================================
+
+        function updateTrackPanel() {
+
+            const panel =
+                document.getElementById(
+                    "trackPanel"
+                );
+
+
+            panel.innerHTML = "";
+
+
+            for (
+                const trackId in plotData
+            ) {
+
+                const track =
+                    plotData[trackId];
+
+
+                const card =
+                    document.createElement(
+                        "div"
+                    );
+
+
+                card.className =
+                    "track-card";
+
+
+                const header =
+                    document.createElement(
+                        "div"
+                    );
+
+
+                header.className =
+                    "track-card-header";
+
+
+                const title =
+                    document.createElement(
+                        "span"
+                    );
+
+
+                title.textContent =
+                    "Track " +
+                    trackId;
+
+
+                title.style.color =
+                    track.color;
+
+
+                const status =
+                    document.createElement(
+                        "span"
+                    );
+
+
+                status.textContent =
+                    "LIVE";
+
+
+                status.style.color =
+                    track.color;
+
+
+                header.appendChild(title);
+
+                header.appendChild(status);
+
+
+                const value =
+                    document.createElement(
+                        "div"
+                    );
+
+
+                value.className =
+                    "track-value";
+
+
+                value.innerHTML =
+
+                    track.lastValue.toFixed(2) +
+
+                    '<span class="track-unit">°</span>';
+
+
+                card.appendChild(header);
+
+                card.appendChild(value);
+
+
+                panel.appendChild(card);
+
+            }
+
+        }
+
+
+        // =========================================
+        // INITIAL DRAW
+        // =========================================
+
+        resizeCanvas();
+
+    </script>
+
+</body>
+</html>  *@
+
+
+
+<!DOCTYPE html>
+<html>
+
+<head>
+
+    <meta charset="utf-8" />
+
+    <title>Radar Dashboard</title>
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+
+        html,
+        body {
+
+            width: 100%;
+            min-height: 100%;
+
+            margin: 0;
+            padding: 0;
+
+            overflow-x: hidden;
+            overflow-y: auto;
+
+            background: #0b0f14;
+
+            color: white;
+
+            font-family:
+                Arial,
+                Helvetica,
+                sans-serif;
+
+        }
+
+
+        /* =========================================
+           DASHBOARD
+           ========================================= */
+
+        .dashboard {
+
+            width: 100%;
+
+            min-height: calc(100vh - 70px);
+
+            padding: 14px;
+
+            display: flex;
+
+            flex-direction: column;
+
+        }
+
+
+        /* =========================================
+           HEADER
+           ========================================= */
+
+        .header {
+
+            width: 100%;
+
+            height: 48px;
+
+            flex: 0 0 48px;
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: space-between;
+
+            padding: 0 8px;
+
+            border-bottom:
+                1px solid #29323b;
+
+        }
+
+
+        .header-title {
+
+            font-size: 21px;
+
+            font-weight: 500;
+
+        }
+
+
+        .live-status {
+
+            display: flex;
+
+            align-items: center;
+
+            gap: 7px;
+
+            font-size: 11px;
+
+            color: #00ff66;
+
+        }
+
+
+        .live-dot {
+
+            width: 8px;
+            height: 8px;
+
+            border-radius: 50%;
+
+            background: #00ff66;
+
+            box-shadow:
+                0 0 7px #00ff66;
+
+        }
+
+
+        /* =========================================
+           PLOT GRID
+           ========================================= */
+
+        .plot-grid {
+
+            width: 100%;
+
+            display: grid;
+
+            grid-template-columns:
+                minmax(0, 1fr)
+                minmax(0, 1fr);
+
+            grid-template-rows:
+                270px
+                270px
+                270px;
+
+            gap: 10px;
+
+            padding-top: 10px;
+
+        }
+
+
+        /* =========================================
+           PLOT CARD
+           ========================================= */
+
+        .plot-card {
+
+            min-width: 0;
+            min-height: 0;
+
+            background: #11161d;
+
+            border:
+                1px solid #29333d;
+
+            border-radius: 7px;
+
+            display: flex;
+
+            flex-direction: column;
+
+            overflow: hidden;
+
+        }
+
+
+        .plot-card.snr {
+
+            grid-column:
+                1 / 3;
+
+        }
+
+
+        /* =========================================
+           PLOT HEADER
+           ========================================= */
+
+        .plot-header {
+
+            height: 34px;
+
+            flex: 0 0 34px;
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: space-between;
+
+            padding: 0 11px;
+
+            border-bottom:
+                1px solid #252e37;
+
+        }
+
+
+        .plot-title {
+
+            font-size: 12px;
+
+            color: #d7dce1;
+
+        }
+
+
+        .plot-unit {
+
+            font-size: 10px;
+
+            color: #68727c;
+
+        }
+
+
+        /* =========================================
+           CANVAS
+           ========================================= */
+
+        .canvas-container {
+
+            flex: 1;
+
+            min-width: 0;
+            min-height: 0;
+
+            position: relative;
+
+        }
+
+
+        canvas {
+
+            display: block;
+
+            width: 100%;
+            height: 100%;
+
+        }
+
+
+        /* =========================================
+           TARGET INFORMATION
+           ========================================= */
+
+        .target-section {
+
+            width: 100%;
+
+            margin-top: 12px;
+
+        }
+
+
+        .target-title {
+
+            font-size: 13px;
+
+            color: #c8cdd2;
+
+            margin-bottom: 8px;
+
+        }
+
+
+        .target-container {
+
+            width: 100%;
+
+            display: grid;
+
+            grid-template-columns:
+                repeat(
+                    auto-fill,
+                    minmax(260px, 1fr)
+                );
+
+            gap: 10px;
+
+        }
+
+
+        /* =========================================
+           TARGET CARD
+           ========================================= */
+
+        .target-card {
+
+            background: #11161d;
+
+            border:
+                1px solid #29333d;
+
+            border-radius: 7px;
+
+            padding: 11px 13px;
+
+        }
+
+
+        .target-header {
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: space-between;
+
+            margin-bottom: 10px;
+
+        }
+
+
+        .target-name {
+
+            display: flex;
+
+            align-items: center;
+
+            gap: 7px;
+
+            font-size: 13px;
+
+            font-weight: 500;
+
+        }
+
+
+        .target-color {
+
+            width: 9px;
+            height: 9px;
+
+            border-radius: 50%;
+
+        }
+
+
+        .target-live {
+
+            font-size: 9px;
+
+            color: #00ff66;
+
+        }
+
+
+        /* =========================================
+           TARGET VALUES
+           ========================================= */
+
+        .target-values {
+
+            display: grid;
+
+            grid-template-columns:
+                repeat(3, 1fr);
+
+            gap: 8px;
+
+        }
+
+
+        .target-value {
+
+            display: flex;
+
+            flex-direction: column;
+
+            gap: 3px;
+
+        }
+
+
+        .target-label {
+
+            font-size: 9px;
+
+            color: #68727c;
+
+        }
+
+
+        .target-number {
+
+            font-size: 13px;
+
+            color: #e2e6e9;
+
+        }
+
+
+        /* =========================================
+           EMPTY TARGET
+           ========================================= */
+
+        .no-target {
+
+            color: #59636d;
+
+            font-size: 11px;
+
+            padding: 10px 0;
+
+        }
+
+
+    </style>
+
+</head>
+
+
+<body>
+
+
+<div class="dashboard">
+
+
+    <!-- =========================================
+         HEADER
+         ========================================= -->
+
+    <div class="header">
+
+        <div class="header-title">
+            Radar Dashboard
+        </div>
+
+
+        <div class="live-status">
+
+            <div class="live-dot"></div>
+
+            LIVE
+
+        </div>
+
+    </div>
+
+
+    <!-- =========================================
+         PLOTS
+         ========================================= -->
+
+    <div class="plot-grid">
+
+
+        <!-- =====================================
+             AZIMUTH
+             ===================================== -->
+
+        <div class="plot-card">
+
+            <div class="plot-header">
+
+                <div class="plot-title">
+                    Azimuth
+                </div>
+
+                <div class="plot-unit">
+                    degrees
+                </div>
+
+            </div>
+
+
+            <div class="canvas-container">
+
+                <canvas id="azimuthPlot"></canvas>
+
+            </div>
+
+        </div>
+
+
+        <!-- =====================================
+             ELEVATION
+             ===================================== -->
+
+        <div class="plot-card">
+
+            <div class="plot-header">
+
+                <div class="plot-title">
+                    Elevation
+                </div>
+
+                <div class="plot-unit">
+                    degrees
+                </div>
+
+            </div>
+
+
+            <div class="canvas-container">
+
+                <canvas id="elevationPlot"></canvas>
+
+            </div>
+
+        </div>
+
+
+        <!-- =====================================
+             RANGE
+             ===================================== -->
+
+        <div class="plot-card">
+
+            <div class="plot-header">
+
+                <div class="plot-title">
+                    Range
+                </div>
+
+                <div class="plot-unit">
+                    meters
+                </div>
+
+            </div>
+
+
+            <div class="canvas-container">
+
+                <canvas id="rangePlot"></canvas>
+
+            </div>
+
+        </div>
+
+
+        <!-- =====================================
+             VELOCITY
+             ===================================== -->
+
+        <div class="plot-card">
+
+            <div class="plot-header">
+
+                <div class="plot-title">
+                    Velocity
+                </div>
+
+                <div class="plot-unit">
+                    m/s
+                </div>
+
+            </div>
+
+
+            <div class="canvas-container">
+
+                <canvas id="velocityPlot"></canvas>
+
+            </div>
+
+        </div>
+
+
+        <!-- =====================================
+             SNR
+             ===================================== -->
+
+        <div class="plot-card snr">
+
+            <div class="plot-header">
+
+                <div class="plot-title">
+                    SNR
+                </div>
+
+                <div class="plot-unit">
+                    dB
+                </div>
+
+            </div>
+
+
+            <div class="canvas-container">
+
+                <canvas id="snrPlot"></canvas>
+
+            </div>
+
+        </div>
+
+
+    </div>
+
+
+    <!-- =========================================
+         TARGET INFORMATION
+         ========================================= -->
+
+    <div class="target-section">
+
+        <div class="target-title">
+            Target Information
+        </div>
+
+
+        <div
+            id="targetContainer"
+            class="target-container">
+
+            <div class="no-target">
+                Waiting for radar data...
+            </div>
+
+        </div>
+
+    </div>
+
+
+</div>
+
+
+<!-- =========================================
+     SIGNALR
+     ========================================= -->
+
+<script src="~/js/lib/signalr.min.js"></script>
+
+<script src="~/js/signalr.js"></script>
+
+<script src="~/js/communication.js"></script>
+
+<script src="~/js/radarData.js"></script>
+
+
+<script>
+
+
+    // =========================================
+    // SETTINGS
+    // =========================================
+
+    const MAX_POINTS = 100;
+
+
+    // =========================================
+    // TRACK COLORS
+    // =========================================
+
+    const TRACK_COLORS = [
+
+        "#00ff66",
+        "#00bfff",
+        "#ffcc00",
+        "#ff4d6d",
+        "#c084fc",
+        "#ff8c42",
+        "#22d3ee",
+        "#f472b6",
+        "#a3e635",
+        "#fb7185"
+
+    ];
+
+
+    function getTrackColor(trackId) {
+
+        return TRACK_COLORS[
+            Number(trackId) %
+            TRACK_COLORS.length
+        ];
+
+    }
+
+
+    // =========================================
+    // TRACK DATA
+    // =========================================
+
+    const tracks = {};
+
+
+    // =========================================
+    // CREATE TRACK
+    // =========================================
+
+    function createTrack(trackId) {
+
+        return {
+
+            trackId: trackId,
+
+            color:
+                getTrackColor(trackId),
+
+            azimuth: [],
+            elevation: [],
+            range: [],
+            velocity: [],
+            snr: [],
+
+            latest: {
+
+                azimuth: 0,
+                elevation: 0,
+                range: 0,
+                velocity: 0,
+                snr: 0
+
+            },
+
+            lastUpdate:
+                Date.now()
+
+        };
+
+    }
+
+
+    // =========================================
+    // ADD POINT
+    // =========================================
+
+    function addPoint(
+        array,
+        value
+    ) {
+
+        array.push({
+
+            time:
+                Date.now(),
+
+            value:
+                value
+
+        });
+
+
+        if (
+            array.length >
+            MAX_POINTS
+        ) {
+
+            array.shift();
+
+        }
+
+    }
+
+
+    // =========================================
+    // RECEIVE RADAR DATA
+    // =========================================
+
+    RadarDataManager.addHandler(
+        function (data) {
+
+
+            const trackId =
+                data.trackId;
+
+
+            if (trackId == null) {
+
+                return;
+
+            }
+
+
+            if (!tracks[trackId]) {
+
+                tracks[trackId] =
+                    createTrack(trackId);
+
+            }
+
+
+            const track =
+                tracks[trackId];
+
+
+            // -------------------------------------
+            // AZIMUTH
+            // -------------------------------------
+
+            const azimuth =
+                Number(data.azimuth);
+
+
+            if (
+                Number.isFinite(azimuth)
+            ) {
+
+                addPoint(
+                    track.azimuth,
+                    azimuth
+                );
+
+                track.latest.azimuth =
+                    azimuth;
+
+            }
+
+
+            // -------------------------------------
+            // ELEVATION
+            // -------------------------------------
+
+            const elevation =
+                Number(data.elevation);
+
+
+            if (
+                Number.isFinite(elevation)
+            ) {
+
+                addPoint(
+                    track.elevation,
+                    elevation
+                );
+
+                track.latest.elevation =
+                    elevation;
+
+            }
+
+
+            // -------------------------------------
+            // RANGE
+            // -------------------------------------
+
+            const range =
+                Number(data.range);
+
+
+            if (
+                Number.isFinite(range)
+            ) {
+
+                addPoint(
+                    track.range,
+                    range
+                );
+
+                track.latest.range =
+                    range;
+
+            }
+
+
+            // -------------------------------------
+            // VELOCITY
+            // -------------------------------------
+
+            const velocity =
+                Number(data.velocity);
+
+
+            if (
+                Number.isFinite(velocity)
+            ) {
+
+                addPoint(
+                    track.velocity,
+                    velocity
+                );
+
+                track.latest.velocity =
+                    velocity;
+
+            }
+
+
+            // -------------------------------------
+            // SNR
+            // -------------------------------------
+
+            const snr =
+                Number(data.snr);
+
+
+            if (
+                Number.isFinite(snr)
+            ) {
+
+                addPoint(
+                    track.snr,
+                    snr
+                );
+
+                track.latest.snr =
+                    snr;
+
+            }
+
+
+            track.lastUpdate =
+                Date.now();
+
+
+            // -------------------------------------
+            // UPDATE
+            // -------------------------------------
+
+            drawAllPlots();
+
+            updateTargetInformation();
+
+        }
+    );
+
+
+    // =========================================
+    // PLOT CONFIGURATION
+    // =========================================
+
+    const plotConfigs = {
+
+        azimuth: {
+
+            canvas:
+                document.getElementById(
+                    "azimuthPlot"
+                )
+
+        },
+
+
+        elevation: {
+
+            canvas:
+                document.getElementById(
+                    "elevationPlot"
+                )
+
+        },
+
+
+        range: {
+
+            canvas:
+                document.getElementById(
+                    "rangePlot"
+                )
+
+        },
+
+
+        velocity: {
+
+            canvas:
+                document.getElementById(
+                    "velocityPlot"
+                )
+
+        },
+
+
+        snr: {
+
+            canvas:
+                document.getElementById(
+                    "snrPlot"
+                )
+
+        }
+
+    };
+
+
+    // =========================================
+    // RESIZE CANVAS
+    // =========================================
+
+    function resizeCanvas(
+        canvas
+    ) {
+
+        const rect =
+            canvas.getBoundingClientRect();
+
+
+        const dpr =
+            window.devicePixelRatio || 1;
+
+
+        canvas.width =
+            Math.max(
+                1,
+                Math.floor(
+                    rect.width * dpr
+                )
+            );
+
+
+        canvas.height =
+            Math.max(
+                1,
+                Math.floor(
+                    rect.height * dpr
+                )
+            );
+
+
+        const ctx =
+            canvas.getContext("2d");
+
+
+        ctx.setTransform(
+
+            dpr,
+            0,
+            0,
+            dpr,
+            0,
+            0
+
+        );
+
+    }
+
+
+    function resizeAllCanvases() {
+
+        Object.values(
+            plotConfigs
+        ).forEach(
+            function (config) {
+
+                resizeCanvas(
+                    config.canvas
+                );
+
+            }
+        );
+
+
+        drawAllPlots();
+
+    }
+
+
+    window.addEventListener(
+
+        "resize",
+
+        resizeAllCanvases
+
+    );
+
+
+    // =========================================
+    // GET DATA
+    // =========================================
+
+    function getPlotData(
+        parameter
+    ) {
+
+        const result = {};
+
+
+        for (
+            const trackId in tracks
+        ) {
+
+            result[trackId] =
+                tracks[trackId][parameter];
+
+        }
+
+
+        return result;
+
+    }
+
+
+    // =========================================
+    // CALCULATE DYNAMIC Y RANGE
+    // =========================================
+
+    function calculateYRange(
+        dataSets
+    ) {
+
+
+        let min =
+            Infinity;
+
+
+        let max =
+            -Infinity;
+
+
+        for (
+            const trackId in dataSets
+        ) {
+
+
+            dataSets[trackId].forEach(
+                function (point) {
+
+
+                    if (
+                        point.value < min
+                    ) {
+
+                        min =
+                            point.value;
+
+                    }
+
+
+                    if (
+                        point.value > max
+                    ) {
+
+                        max =
+                            point.value;
+
+                    }
+
+                }
+            );
+
+        }
+
+
+        // -------------------------------------
+        // NO DATA
+        // -------------------------------------
+
+        if (
+            min === Infinity ||
+            max === -Infinity
+        ) {
+
+            return {
+
+                min: 0,
+                max: 1
+
+            };
+
+        }
+
+
+        // -------------------------------------
+        // SAME VALUE
+        // -------------------------------------
+
+        if (
+            min === max
+        ) {
+
+
+            let padding;
+
+
+            if (
+                Math.abs(min) < 1
+            ) {
+
+                padding = 1;
+
+            }
+            else {
+
+                padding =
+                    Math.abs(min) *
+                    0.10;
+
+            }
+
+
+            return {
+
+                min:
+                    min - padding,
+
+                max:
+                    max + padding
+
+            };
+
+        }
+
+
+        // -------------------------------------
+        // PADDING
+        // -------------------------------------
+
+        const dataRange =
+            max - min;
+
+
+        const padding =
+            dataRange * 0.10;
+
+
+        return {
+
+            min:
+                min - padding,
+
+            max:
+                max + padding
+
+        };
+
+    }
+
+
+    // =========================================
+    // NICE AXIS RANGE
+    // =========================================
+
+    function niceNumber(
+        value
+    ) {
+
+
+        if (
+            value === 0
+        ) {
+
+            return 1;
+
+        }
+
+
+        const exponent =
+            Math.floor(
+                Math.log10(
+                    Math.abs(value)
+                )
+            );
+
+
+        const fraction =
+            Math.abs(value) /
+            Math.pow(
+                10,
+                exponent
+            );
+
+
+        let niceFraction;
+
+
+        if (
+            fraction <= 1
+        ) {
+
+            niceFraction = 1;
+
+        }
+        else if (
+            fraction <= 2
+        ) {
+
+            niceFraction = 2;
+
+        }
+        else if (
+            fraction <= 5
+        ) {
+
+            niceFraction = 5;
+
+        }
+        else {
+
+            niceFraction = 10;
+
+        }
+
+
+        return (
+            niceFraction *
+            Math.pow(
+                10,
+                exponent
+            )
+        );
+
+    }
+
+
+    // =========================================
+    // AXIS VALUES
+    // =========================================
+
+    function calculateAxis(
+        min,
+        max,
+        divisions
+    ) {
+
+
+        const rawStep =
+            (
+                max - min
+            ) /
+            divisions;
+
+
+        const step =
+            niceNumber(
+                rawStep
+            );
+
+
+        const axisMin =
+            Math.floor(
+                min / step
+            ) *
+            step;
+
+
+        const axisMax =
+            Math.ceil(
+                max / step
+            ) *
+            step;
+
+
+        return {
+
+            min:
+                axisMin,
+
+            max:
+                axisMax,
+
+            step:
+                step
+
+        };
+
+    }
+
+
+    // =========================================
+    // FORMAT AXIS VALUE
+    // =========================================
+
+    function formatAxisValue(
+        value
+    ) {
+
+
+        const abs =
+            Math.abs(value);
+
+
+        if (
+            abs >= 1000000
+        ) {
+
+            return (
+                value / 1000000
+            ).toFixed(1) + "M";
+
+        }
+
+
+        if (
+            abs >= 1000
+        ) {
+
+            return (
+                value / 1000
+            ).toFixed(1) + "k";
+
+        }
+
+
+        if (
+            abs >= 100
+        ) {
+
+            return value.toFixed(0);
+
+        }
+
+
+        if (
+            abs >= 10
+        ) {
+
+            return value.toFixed(1);
+
+        }
+
+
+        return value.toFixed(2);
+
+    }
+
+
+    // =========================================
+    // DRAW PLOT
+    // =========================================
+
+    function drawPlot(
+        config,
+        parameter
+    ) {
+
+
+        const canvas =
+            config.canvas;
+
+
+        const rect =
+            canvas.getBoundingClientRect();
+
+
+        const width =
+            rect.width;
+
+
+        const height =
+            rect.height;
+
+
+        if (
+            width <= 0 ||
+            height <= 0
+        ) {
+
+            return;
+
+        }
+
+
+        const ctx =
+            canvas.getContext("2d");
+
+
+        // -------------------------------------
+        // CLEAR
+        // -------------------------------------
+
+        ctx.clearRect(
+
+            0,
+            0,
+            width,
+            height
+
+        );
+
+
+        // -------------------------------------
+        // MARGINS
+        // -------------------------------------
+
+        const left =
+            52;
+
+
+        const right =
+            12;
+
+
+        const top =
+            10;
+
+
+        const bottom =
+            28;
+
+
+        const plotWidth =
+            width -
+            left -
+            right;
+
+
+        const plotHeight =
+            height -
+            top -
+            bottom;
+
+
+        // -------------------------------------
+        // BACKGROUND
+        // -------------------------------------
+
+        ctx.fillStyle =
+            "#0c1116";
+
+
+        ctx.fillRect(
+
+            0,
+            0,
+            width,
+            height
+
+        );
+
+
+        // -------------------------------------
+        // DATA
+        // -------------------------------------
+
+        const dataSets =
+            getPlotData(
+                parameter
+            );
+
+
+        // -------------------------------------
+        // Y RANGE
+        // -------------------------------------
+
+        const dynamicRange =
+            calculateYRange(
+                dataSets
+            );
+
+
+        const axis =
+            calculateAxis(
+
+                dynamicRange.min,
+
+                dynamicRange.max,
+
+                5
+
+            );
+
+
+        const yMin =
+            axis.min;
+
+
+        const yMax =
+            axis.max;
+
+
+        const yStep =
+            axis.step;
+
+
+        // -------------------------------------
+        // HORIZONTAL GRID
+        // -------------------------------------
+
+        ctx.lineWidth = 1;
+
+        ctx.font =
+            "10px Arial";
+
+
+        let yValue =
+            yMin;
+
+
+        while (
+            yValue <=
+            yMax +
+            yStep * 0.01
+        ) {
+
+
+            const normalized =
+                (
+                    yValue -
+                    yMin
+                ) /
+                (
+                    yMax -
+                    yMin
+                );
+
+
+            const y =
+                top +
+                (
+                    1 -
+                    normalized
+                ) *
+                plotHeight;
+
+
+            ctx.strokeStyle =
+                "#202830";
+
+
+            ctx.beginPath();
+
+
+            ctx.moveTo(
+                left,
+                y
+            );
+
+
+            ctx.lineTo(
+                left + plotWidth,
+                y
+            );
+
+
+            ctx.stroke();
+
+
+            // ---------------------------------
+            // Y LABEL
+            // ---------------------------------
+
+            ctx.fillStyle =
+                "#737c85";
+
+
+            ctx.textAlign =
+                "right";
+
+
+            ctx.fillText(
+
+                formatAxisValue(
+                    yValue
+                ),
+
+                left - 7,
+
+                y + 3
+
+            );
+
+
+            yValue += yStep;
+
+        }
+
+
+        // -------------------------------------
+        // VERTICAL GRID
+        // -------------------------------------
+
+        const verticalLines =
+            10;
+
+
+        for (
+            let i = 0;
+            i <= verticalLines;
+            i++
+        ) {
+
+
+            const x =
+                left +
+                (
+                    i /
+                    verticalLines
+                ) *
+                plotWidth;
+
+
+            ctx.strokeStyle =
+                "#181f26";
+
+
+            ctx.beginPath();
+
+
+            ctx.moveTo(
+                x,
+                top
+            );
+
+
+            ctx.lineTo(
+                x,
+                top + plotHeight
+            );
+
+
+            ctx.stroke();
+
+
+            // ---------------------------------
+            // X LABEL
+            // ---------------------------------
+
+            const seconds =
+                i *
+                1;
+
+
+            ctx.fillStyle =
+                "#737c85";
+
+
+            ctx.textAlign =
+                "center";
+
+
+            ctx.fillText(
+
+                seconds +
+                "s",
+
+                x,
+
+                height - 8
+
+            );
+
+        }
+
+
+        // -------------------------------------
+        // DRAW TRACKS
+        // -------------------------------------
+
+        for (
+            const trackId in dataSets
+        ) {
+
+
+            const points =
+                dataSets[trackId];
+
+
+            if (
+                points.length < 2
+            ) {
+
+                continue;
+
+            }
+
+
+            const track =
+                tracks[trackId];
+
+
+            ctx.beginPath();
+
+
+            points.forEach(
+                function (
+                    point,
+                    index
+                ) {
+
+
+                    /*
+                       X axis is based on
+                       incoming sample count.
+
+                       The latest point is
+                       always at the right side.
+                    */
+
+                    const x =
+                        left +
+                        (
+                            index /
+                            (
+                                MAX_POINTS - 1
+                            )
+                        ) *
+                        plotWidth;
+
+
+                    const normalized =
+                        (
+                            point.value -
+                            yMin
+                        ) /
+                        (
+                            yMax -
+                            yMin
+                        );
+
+
+                    const y =
+                        top +
+                        (
+                            1 -
+                            normalized
+                        ) *
+                        plotHeight;
+
+
+                    if (
+                        index === 0
+                    ) {
+
+                        ctx.moveTo(
+                            x,
+                            y
+                        );
+
+                    }
+                    else {
+
+                        ctx.lineTo(
+                            x,
+                            y
+                        );
+
+                    }
+
+                }
+            );
+
+
+            ctx.strokeStyle =
+                track.color;
+
+
+            ctx.lineWidth =
+                1.8;
+
+
+            ctx.lineJoin =
+                "round";
+
+
+            ctx.lineCap =
+                "round";
+
+
+            ctx.stroke();
+
+
+            // ---------------------------------
+            // LAST POINT
+            // ---------------------------------
+
+            const last =
+                points[
+                    points.length - 1
+                ];
+
+
+            const lastX =
+                left +
+                (
+                    (
+                        points.length - 1
+                    ) /
+                    (
+                        MAX_POINTS - 1
+                    )
+                ) *
+                plotWidth;
+
+
+            const lastNormalized =
+                (
+                    last.value -
+                    yMin
+                ) /
+                (
+                    yMax -
+                    yMin
+                );
+
+
+            const lastY =
+                top +
+                (
+                    1 -
+                    lastNormalized
+                ) *
+                plotHeight;
+
+
+            ctx.beginPath();
+
+
+            ctx.arc(
+
+                lastX,
+                lastY,
+
+                3,
+
+                0,
+                Math.PI * 2
+
+            );
+
+
+            ctx.fillStyle =
+                track.color;
+
+
+            ctx.fill();
+
+        }
+
+    }
+
+
+    // =========================================
+    // DRAW ALL PLOTS
+    // =========================================
+
+    function drawAllPlots() {
+
+
+        drawPlot(
+
+            plotConfigs.azimuth,
+
+            "azimuth"
+
+        );
+
+
+        drawPlot(
+
+            plotConfigs.elevation,
+
+            "elevation"
+
+        );
+
+
+        drawPlot(
+
+            plotConfigs.range,
+
+            "range"
+
+        );
+
+
+        drawPlot(
+
+            plotConfigs.velocity,
+
+            "velocity"
+
+        );
+
+
+        drawPlot(
+
+            plotConfigs.snr,
+
+            "snr"
+
+        );
+
+    }
+
+
+    // =========================================
+    // TARGET INFORMATION
+    // =========================================
+
+    function updateTargetInformation() {
+
+
+        const container =
+            document.getElementById(
+                "targetContainer"
+            );
+
+
+        const trackIds =
+            Object.keys(tracks);
+
+
+        if (
+            trackIds.length === 0
+        ) {
+
+            container.innerHTML =
+
+                '<div class="no-target">' +
+                'Waiting for radar data...' +
+                '</div>';
+
+            return;
+
+        }
+
+
+        container.innerHTML = "";
+
+
+        trackIds.forEach(
+            function (trackId) {
+
+
+                const track =
+                    tracks[trackId];
+
+
+                const card =
+                    document.createElement(
+                        "div"
+                    );
+
+
+                card.className =
+                    "target-card";
+
+
+                card.innerHTML =
+
+                    '<div class="target-header">' +
+
+                        '<div class="target-name">' +
+
+                            '<div class="target-color" ' +
+                            'style="background:' +
+                            track.color +
+                            '"></div>' +
+
+                            '<span>' +
+                            'Track ' +
+                            track.trackId +
+                            '</span>' +
+
+                        '</div>' +
+
+                        '<div class="target-live">' +
+                        'LIVE' +
+                        '</div>' +
+
+                    '</div>' +
+
+
+                    '<div class="target-values">' +
+
+                        '<div class="target-value">' +
+
+                            '<div class="target-label">' +
+                            'Azimuth' +
+                            '</div>' +
+
+                            '<div class="target-number">' +
+                            track.latest.azimuth.toFixed(2) +
+                            '°' +
+                            '</div>' +
+
+                        '</div>' +
+
+
+                        '<div class="target-value">' +
+
+                            '<div class="target-label">' +
+                            'Elevation' +
+                            '</div>' +
+
+                            '<div class="target-number">' +
+                            track.latest.elevation.toFixed(2) +
+                            '°' +
+                            '</div>' +
+
+                        '</div>' +
+
+
+                        '<div class="target-value">' +
+
+                            '<div class="target-label">' +
+                            'Range' +
+                            '</div>' +
+
+                            '<div class="target-number">' +
+                            formatDistance(
+                                track.latest.range
+                            ) +
+                            '</div>' +
+
+                        '</div>' +
+
+
+                        '<div class="target-value">' +
+
+                            '<div class="target-label">' +
+                            'Velocity' +
+                            '</div>' +
+
+                            '<div class="target-number">' +
+                            track.latest.velocity.toFixed(2) +
+                            ' m/s' +
+                            '</div>' +
+
+                        '</div>' +
+
+
+                        '<div class="target-value">' +
+
+                            '<div class="target-label">' +
+                            'SNR' +
+                            '</div>' +
+
+                            '<div class="target-number">' +
+                            track.latest.snr.toFixed(2) +
+                            ' dB' +
+                            '</div>' +
+
+                        '</div>' +
+
+                    '</div>';
+
+
+                container.appendChild(
+                    card
+                );
+
+            }
+        );
+
+    }
+
+
+    // =========================================
+    // FORMAT DISTANCE
+    // =========================================
+
+    function formatDistance(
+        value
+    ) {
+
+
+        if (
+            Math.abs(value) >= 1000
+        ) {
+
+            return (
+
+                value / 1000
+
+            ).toFixed(2) +
+
+            " km";
+
+        }
+
+
+        return (
+
+            value.toFixed(1)
+
+        ) +
+
+        " m";
+
+    }
+
+
+    // =========================================
+    // REMOVE INACTIVE TRACKS
+    // =========================================
+
+    function removeInactiveTracks() {
+
+
+        const now =
+            Date.now();
+
+
+        const timeout =
+            5000;
+
+
+        for (
+            const trackId in tracks
+        ) {
+
+
+            if (
+
+                now -
+                tracks[trackId].lastUpdate
+                >
+                timeout
+
+            ) {
+
+                delete tracks[trackId];
+
+            }
+
+        }
+
+
+        updateTargetInformation();
+
+        drawAllPlots();
+
+    }
+
+
+    // =========================================
+    // CLEANUP
+    // =========================================
+
+    setInterval(
+
+        removeInactiveTracks,
+
+        1000
+
+    );
+
+
+    // =========================================
+    // INITIALIZE
+    // =========================================
+
+    resizeAllCanvases();
+
+    updateTargetInformation();
+
+
+</script>
+
+
+</body>
+
+</html>
+

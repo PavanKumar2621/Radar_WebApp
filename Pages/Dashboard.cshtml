@@ -26,15 +26,25 @@
             border-radius: 8px;
             border: 1px solid #444;
         }
+        .card-title {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #00ff00;
+        }
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid #333;
+        }
         .label {
             font-size: 14px;
             color: #aaa;
         }
         .value {
-            font-size: 25px;
-            margin-top: 10px;
+            font-size: 18px;
             color: #00ff00;
-            /* font-weight: bold; */
         }
         .status-panel {
             background: #222;
@@ -43,7 +53,6 @@
             margin-bottom: 20px;
             font-size: 18px;
         }
-
         .status-panel div {
             margin: 5px 0;
         }
@@ -57,75 +66,118 @@
         <div> Radar: <span id="radarStatus"> Waiting... </span> </div>
     </div>
 
-    <div class="dashboard">
-
-        <div class="card">
-            <div class="label"> Track ID </div>
-            <div class="value" id="trackId"> -- </div>
-        </div>
-
-        <div class="card">
-            <div class="label"> Azimuth </div>
-            <div class="value" id="azimuth"> -- </div>
-        </div>
-
-        <div class="card">
-            <div class="label"> Elevation </div>
-            <div class="value" id="elevation"> -- </div>
-        </div>
-
-        <div class="card">
-            <div class="label"> Range </div>
-            <div class="value" id="range"> -- </div>
-        </div>
-
-        <div class="card">
-            <div class="label"> Velocity </div>
-            <div class="value" id="velocity"> -- </div>
-        </div>
-
-        <div class="card">
-            <div class="label"> SNR </div>
-            <div class="value" id="snr"> -- </div>
-        </div>
-
-    </div>
+    <div class="dashboard" id="dashboard"> </div>
 
     <script src="~/js/lib/signalr.min.js"></script>
     <script src="~/js/signalr.js"></script>
     <script src="~/js/communication.js"></script>
+    <script src="~/js/radarData.js"></script>
 
     <script>
 
         let lastRadarDataTime = null;
 
-        connection.on("ReceiveRadarData", function (message) {
-                lastRadarDataTime = Date.now();
-                // console.log("Radar data received:", message);
-                const data = message.data;
-                // console.log("Radar data:", data.trackId, data.azimuth, data.elevation, data.range, data.velocity, data.snr);
-                document.getElementById("radarStatus").textContent = "Receiving";
-                document.getElementById("trackId").textContent = data.trackId ?? "--";
-                document.getElementById("azimuth").textContent = data.azimuth != null ? data.azimuth + "°" : "--";
-                document.getElementById("elevation").textContent = data.elevation != null ? data.elevation + "°" : "--"; 
-                document.getElementById("range").textContent = data.range != null ? data.range + " m" : "--";
-                document.getElementById("velocity").textContent = data.velocity != null ? data.velocity + " m/s" : "--";
-                document.getElementById("snr").textContent = data.snr != null ? data.snr + " dB" : "--";
+
+        // ============================================
+        // RADAR DATA RECEIVED
+        // ============================================
+
+        RadarDataManager.addHandler(function (data) {
+
+            lastRadarDataTime = Date.now();
+            document.getElementById( "radarStatus").textContent = "Receiving";
+
+            const trackId = data.trackId;
+
+            // ========================================
+            // CREATE CARD IF IT DOES NOT EXIST
+            // ========================================
+
+            if (!document.getElementById(`track-${trackId}`)) {
+
+                const dashboard = document.getElementById("dashboard");
+                const card = document.createElement("div");
+                card.className = "card";
+                card.id = `track-${trackId}`;
+
+                card.innerHTML = `
+                    <div class="card-title">Track ${trackId}</div>
+
+                    <div class="data-row">
+                        <span class="label">Azimuth</span>
+                        <span class="value" id="azimuth-${trackId}">--</span>
+                    </div>
+
+                    <div class="data-row">
+                        <span class="label">Elevation</span>
+                        <span class="value" id="elevation-${trackId}">--</span>
+                    </div>
+
+                    <div class="data-row">
+                        <span class="label">Range</span>
+                        <span class="value" id="range-${trackId}">--</span>
+                    </div>
+
+                    <div class="data-row">
+                        <span class="label">Velocity</span>
+                        <span class="value" id="velocity-${trackId}">--</span>
+                    </div>
+
+                    <div class="data-row">
+                        <span class="label">SNR</span>
+                        <span class="value" id="snr-${trackId}">--</span>
+                    </div>
+                `;
+
+                dashboard.appendChild(card);
+                console.log(`Created card for Track ${trackId}`);
             }
-        );
+
+            // ========================================
+            // UPDATE CARD VALUES
+            // ========================================
+
+            document.getElementById(`azimuth-${trackId}`).textContent = data.azimuth != null ? data.azimuth.toFixed(2) + "°" : "--";
+            document.getElementById(`elevation-${trackId}`).textContent = data.elevation != null ? data.elevation.toFixed(2) + "°" : "--";
+            document.getElementById(`range-${trackId}`).textContent = data.range != null ? data.range.toFixed(2) + " m" : "--";
+            document.getElementById(`velocity-${trackId}`).textContent = data.velocity != null ? data.velocity.toFixed(2) + " m/s" : "--";
+            document.getElementById(`snr-${trackId}`).textContent = data.snr != null ? data.snr.toFixed(2) + " dB" : "--";
+        });
+
+
+        // ============================================
+        // TRACK REMOVED
+        // ============================================
+
+        RadarDataManager.addRemoveHandler(function (trackId) {
+            const card = document.getElementById(`track-${trackId}`);
+            if (card) {
+                card.remove();
+                console.log(`Dashboard card removed for Track ${trackId}`);
+            }
+        });
+
+        // ============================================
+        // RADAR NO DATA DETECTION
+        // ============================================
+
+        setInterval(function () {
+            if (lastRadarDataTime !== null && Date.now() - lastRadarDataTime > 3000) {
+                document.getElementById("radarStatus").textContent = "No Data";
+            }
+        }, 1000);
+
+
+        // ============================================
+        // SIGNALR CONNECTION CLOSED
+        // ============================================
 
         connection.onclose(function () {
             document.getElementById("connectionStatus").textContent = "Disconnected";
             document.getElementById("radarStatus").textContent = "No Connection";
         });
 
-        // Detect if radar has stopped sending data
-        setInterval(function () {
-            if (lastRadarDataTime !== null && Date.now() - lastRadarDataTime > 3000) {
-                document.getElementById("radarStatus").textContent = "No Data";
-            }
-        }, 1000);
-        
     </script>
+
 </body>
 </html>
